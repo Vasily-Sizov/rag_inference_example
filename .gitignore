@@ -93,5 +93,7 @@ logs/
 
 # Project specific
 storage/*.txt
+!storage/a.txt
+!storage/b.txt
 !storage/.gitkeep
 
