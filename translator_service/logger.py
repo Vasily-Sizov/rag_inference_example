@@ -1,0 +1,12 @@
+"""
+Настройка логирования для translator_service.
+"""
+
+import logging
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+)
+
+logger = logging.getLogger("translator_service")
