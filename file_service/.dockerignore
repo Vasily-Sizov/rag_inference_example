@@ -8,7 +8,8 @@ __pycache__/
 dist/
 build/
 *.egg
-.venv/
+
+# Virtual environments
 venv/
 env/
 ENV/
@@ -33,9 +34,16 @@ htmlcov/
 .DS_Store
 Thumbs.db
 
-# UV
-.venv/
-uv.lock
+# Git
+.git/
+.gitignore
+
+# Documentation
+*.md
+README*
 
 # Docker
-*.log
+Dockerfile
+.dockerignore
+docker-compose.yml
+

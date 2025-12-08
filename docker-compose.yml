@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   # ======================================================
   # ARTEMIS BROKER (3 IN + 3 OUT очереди)
@@ -52,23 +50,9 @@ services:
       - ./storage:/storage
     restart: unless-stopped
 
-  # ===================================================================
-  # ARTEMIS_CHAT_EMAIL — слушает chat.in + email.in и шлёт в translator
-  # ===================================================================
-  artemis_chat_email:
-    build: ./artemis_chat_email
-    environment:
-      ARTEMIS_URL: "amqp://artemis:artemis@artemis:61616"
-      QUEUE_CHAT: "chat.in"
-      QUEUE_EMAIL: "email.in"
-      TRANSLATOR_URL: "http://translator_service:8005/ingest"
-    depends_on:
-      - artemis
-      - translator_service
-    restart: unless-stopped
-
   # ===============================================================
-  # TRANSLATOR SERVICE — маршрутизатор → Redis (chats / email)
+  # TRANSLATOR SERVICE — сервис-переходник: слушает Artemis, 
+  # маршрутизирует в Redis/Indexer, принимает результаты и пишет в Artemis
   # ===============================================================
   translator_service:
     build: ./translator_service
@@ -77,59 +61,55 @@ services:
       REDIS_PORT: 6379
       QUEUE_CHATS: chats
       QUEUE_EMAIL: email
+      ARTEMIS_URL: "amqp://artemis:artemis@artemis:61616"
+      ARTEMIS_QUEUE_CHAT_IN: "chat.in"
+      ARTEMIS_QUEUE_EMAIL_IN: "email.in"
+      ARTEMIS_QUEUE_INDEX_IN: "index.in"
+      ARTEMIS_QUEUE_CHAT_OUT: "chat.out"
+      ARTEMIS_QUEUE_EMAIL_OUT: "email.out"
+      ARTEMIS_QUEUE_INDEX_OUT: "index.out"
+      INDEXER_URL: "http://indexer_service:8001/index"
     ports:
       - "8005:8005"
     depends_on:
       - redis
+      - artemis
     restart: unless-stopped
 
   # ======================================================
-  # INDEXER_STUB — генерирует вектора → OpenSearch
+  # INDEXER_SERVICE — генерирует вектора → OpenSearch, отправляет результат в translator_service
   # ======================================================
-  indexer_stub:
-    build: ./indexer_stub
+  indexer_service:
+    build: ./indexer_service
     environment:
       OPENSEARCH_HOST: "http://opensearch:9200"
       FILE_SERVICE_URL: "http://file_service:9001"
       INDEX_NAME: "docs"
+      TRANSLATOR_SERVICE_URL: "http://translator_service:8005/result/indexer"
     ports:
       - "8001:8001"
     depends_on:
       - opensearch
       - file_service
-    restart: unless-stopped
-
-  # ======================================================================
-  # ARTEMIS_INDEXER — слушает index.in и шлёт результат в index.out
-  # ======================================================================
-  artemis_indexer:
-    build: ./artemis_indexer
-    environment:
-      ARTEMIS_URL: "amqp://artemis:artemis@artemis:61616"
-      QUEUE_NAME: "index.in"
-      INDEXER_URL: "http://indexer_stub:8001/index"
-      OUT_QUEUE_NAME: "index.out"
-    depends_on:
-      - artemis
-      - indexer_stub
+      - translator_service
     restart: unless-stopped
 
   # ======================================================
-  # RAG_STUB — воркер, читает Redis и шлёт ответы в chat.out / email.out
+  # RAG_SERVICE — воркер, читает Redis и шлёт ответы в translator_service
   # ======================================================
-  rag_stub:
-    build: ./rag_stub
+  rag_service:
+    build: ./rag_service
     environment:
       REDIS_HOST: redis
       OPENSEARCH_HOST: "http://opensearch:9200"
       INDEX_NAME: "docs"
-      ARTEMIS_URL: "amqp://artemis:artemis@artemis:61616"
-      CHAT_OUT_QUEUE: "chat.out"
-      EMAIL_OUT_QUEUE: "email.out"
+      QUEUE_CHATS: chats
+      QUEUE_EMAIL: email
+      TRANSLATOR_SERVICE_URL: "http://translator_service:8005/result/rag"
     depends_on:
       - redis
       - opensearch
-      - artemis
+      - translator_service
     restart: unless-stopped
 
 networks:

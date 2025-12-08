@@ -1,11 +1,12 @@
 """
-Логика определения назначения сообщения (chat/email)
-и помещение его в соответствующую очередь Redis.
+Логика определения назначения сообщения (chat/email/index)
+и маршрутизация в соответствующие сервисы.
 """
 
 from config import QUEUE_CHATS, QUEUE_EMAIL
-from redis_client import push_to_queue
+from clients.redis import push_to_queue
 from logger import logger
+from clients.indexer_service_internal import trigger_indexing
 
 
 def route_message(source_queue: str, body: str) -> str:
@@ -37,3 +38,21 @@ def route_message(source_queue: str, body: str) -> str:
 
     logger.info(f"Сообщение направлено в Redis очередь: {redis_queue}")
     return redis_queue
+
+
+def route_index_message(body: str):
+    """
+    Обрабатывает сообщение из очереди index.in и запускает индексацию.
+
+    Параметры
+    ---------
+    body : str
+        Содержимое сообщения (может содержать параметры индексации).
+    """
+    logger.info(f"Получен запрос на индексацию: {body}")
+    try:
+        trigger_indexing()
+        logger.info("Индексация успешно запущена")
+    except Exception as e:
+        logger.error(f"Ошибка при запуске индексации: {e}", exc_info=True)
+        raise
